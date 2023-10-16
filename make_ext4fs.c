@@ -35,10 +35,21 @@
 #include <sys/types.h>
 #include <locale.h>
 
+#include <uthash.h>
+
 /* TODO: Not implemented:
    Allocating blocks in the same block group as the file inode
    Hash or binary tree directories
  */
+
+struct inode_map {
+    int count;
+    u32 src_inode;
+    u32 dst_inode;
+    UT_hash_handle hh;
+};
+
+static struct inode_map *inode_ht = NULL;
 
 static int filter_dot(const struct dirent *d)
 {
@@ -87,6 +98,9 @@ static u32 build_directory_structure(const char *full_path, const char *dir_path
 	u32 entry_inode;
 	u32 dirs = 0;
 	bool needs_lost_and_found = false;
+
+	u32 src_inode;
+	struct inode_map *entry;
 
 	/* alphasort is locale-dependent; let's fix the locale to some sane value */
 	setlocale(LC_COLLATE, "C");
@@ -138,6 +152,32 @@ static u32 build_directory_structure(const char *full_path, const char *dir_path
 			i--;
 			entries--;
 			continue;
+		}
+
+		if (stat.st_nlink > 1 && S_ISREG(stat.st_mode)) {
+
+			dentries[i].links = stat.st_nlink;
+			dentries[i].orig_inode = stat.st_ino;
+
+			HASH_FIND_INT(inode_ht, &stat.st_ino, entry);
+
+			if (!entry) {
+				entry = calloc(1, sizeof(struct inode_map));
+
+				if (!entry) {
+					perror("calloc:");
+					return 1;
+				}
+
+				entry->src_inode = stat.st_ino;
+				entry->dst_inode = -1;
+				entry->count = 1;
+
+				HASH_ADD_INT(inode_ht, src_inode, entry);
+
+			} else {
+				entry->count++;
+			}
 		}
 
 		dentries[i].size = stat.st_size;
@@ -209,7 +249,26 @@ static u32 build_directory_structure(const char *full_path, const char *dir_path
 
 	for (i = 0; i < entries; i++) {
 		if (dentries[i].file_type == EXT4_FT_REG_FILE) {
-			entry_inode = make_file(dentries[i].full_path, dentries[i].size);
+			if (dentries[i].links > 1) {
+
+				HASH_FIND_INT(inode_ht, &dentries[i].orig_inode, entry);
+
+				if (!entry) {
+					exit (1);
+				} else {
+
+					if (entry->dst_inode == (u32)-1) {
+						entry_inode = make_file(dentries[i].full_path, dentries[i].size);
+						entry->dst_inode = entry_inode;
+					} else {
+						entry_inode = make_hardlink(entry->dst_inode, entry->count);
+					}
+				}
+
+			} else {
+				entry_inode = make_file(dentries[i].full_path, dentries[i].size);
+			}
+
 		} else if (dentries[i].file_type == EXT4_FT_DIR) {
 			char *subdir_full_path = NULL;
 			char *subdir_dir_path;

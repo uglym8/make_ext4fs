@@ -30,11 +30,14 @@ struct dentry {
 	u32 *inode;
 	u32 mtime;
 	uint64_t capabilities;
+	int links;
+	u32 orig_inode;
 };
 
 u32 make_directory(u32 dir_inode_num, u32 entries, struct dentry *dentries,
 	u32 dirs);
 u32 make_file(const char *filename, u64 len);
+u32 make_hardlink(u32 existing_inode, int links);
 u32 make_link(const char *link);
 u32 make_special(const char *path);
 int inode_set_permissions(u32 inode_num, u16 mode, u16 uid, u16 gid, u32 mtime);

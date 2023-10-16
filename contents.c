@@ -199,6 +199,23 @@ u32 make_file(const char *filename, u64 len)
 	return inode_num;
 }
 
+u32 make_hardlink(u32 existing_inode, int links)
+{
+	struct ext4_inode *inode;
+
+	inode = get_inode(existing_inode);
+	if (inode == NULL) {
+		error("failed to get inode %u", existing_inode);
+		return EXT4_ALLOCATE_FAILED;
+	}
+
+	inode->i_mode = S_IFREG;
+	inode->i_links_count = links;
+	inode->i_flags |= aux_info.default_i_flags;
+
+	return existing_inode;
+}
+
 /* Creates a file on disk.  Returns the inode number of the new file */
 u32 make_link(const char *link)
 {
