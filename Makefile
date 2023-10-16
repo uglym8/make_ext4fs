@@ -1,5 +1,6 @@
 CC ?= gcc
-CFLAGS += -Iinclude -Ilibsparse/include
+CFLAGS += -Iinclude -Ilibsparse/include $(EXTRA_CFLAGS)
+LDFLAGS += $(EXTRA_LDFLAGS)
 
 ifeq ($(STATIC),1)
   ZLIB := -Wl,-Bstatic -lz -Wl,-Bdynamic
@@ -27,7 +28,7 @@ OBJ := \
 	$(CC) $(CFLAGS) -c -o $@ $^
 
 make_ext4fs: $(OBJ) libsparse/libsparse.a
-	$(CC) $(LDFLAGS)-o $@ $^ $(ZLIB)
+	$(CC) $(LDFLAGS) -o $@ $^ $(ZLIB)
 
 libsparse/libsparse.a:
 	$(MAKE) -C libsparse/ libsparse.a

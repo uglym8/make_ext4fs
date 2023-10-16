@@ -1,7 +1,7 @@
 CC ?= gcc
 AR ?= ar
 
-CFLAGS += -Iinclude
+CFLAGS += -Iinclude $(EXTRA_CFLAGS)
 
 OBJ := \
 		backed_block.o \
