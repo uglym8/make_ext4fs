@@ -97,7 +97,7 @@ static u32 build_directory_structure(const char *full_path, const char *dir_path
 	u32 inode;
 	u32 entry_inode;
 	u32 dirs = 0;
-	bool needs_lost_and_found = false;
+	int needs_lost_and_found = 0;
 
 	u32 src_inode;
 	struct inode_map *entry;
@@ -129,22 +129,26 @@ static u32 build_directory_structure(const char *full_path, const char *dir_path
 			if (strcmp(namelist[i]->d_name, "lost+found") == 0)
 				break;
 		if (i == entries)
-			needs_lost_and_found = true;
+			needs_lost_and_found = 1;
 	}
+
+	entries += needs_lost_and_found;
 
 	dentries = calloc(entries, sizeof(struct dentry));
 	if (dentries == NULL)
 		critical_error_errno("malloc");
 
-	for (i = 0; i < entries; i++) {
-		dentries[i].filename = strdup(namelist[i]->d_name);
+	for (i = needs_lost_and_found; i < entries; i++) {
+
+		dentries[i].filename = strdup(namelist[i - (1 & needs_lost_and_found)]->d_name);
 		if (dentries[i].filename == NULL)
 			critical_error_errno("strdup");
 
-		asprintf(&dentries[i].path, "%s%s", dir_path, namelist[i]->d_name);
-		asprintf(&dentries[i].full_path, "%s%s", full_path, namelist[i]->d_name);
+		free(namelist[i - (1 & needs_lost_and_found)]);
 
-		free(namelist[i]);
+		asprintf(&dentries[i].path, "%s%s", dir_path, dentries[i].filename);
+		asprintf(&dentries[i].full_path, "%s%s", full_path, dentries[i].filename);
+
 
 		ret = lstat(dentries[i].full_path, &stat);
 		if (ret < 0) {
@@ -227,12 +231,7 @@ static u32 build_directory_structure(const char *full_path, const char *dir_path
 	free(namelist);
 
 	if (needs_lost_and_found) {
-		/* insert a lost+found directory at the beginning of the dentries */
-		struct dentry *tmp = calloc(entries + 1, sizeof(struct dentry));
-		memset(tmp, 0, sizeof(struct dentry));
-		memcpy(tmp + 1, dentries, entries * sizeof(struct dentry));
-		dentries = tmp;
-
+		/* Fill a lost+found directory at the beginning of the dentries */
 		dentries[0].filename = strdup("lost+found");
 		asprintf(&dentries[0].path, "%slost+found", dir_path);
 		dentries[0].full_path = NULL;
@@ -241,7 +240,6 @@ static u32 build_directory_structure(const char *full_path, const char *dir_path
 		dentries[0].file_type = EXT4_FT_DIR;
 		dentries[0].uid = 0;
 		dentries[0].gid = 0;
-		entries++;
 		dirs++;
 	}
 
